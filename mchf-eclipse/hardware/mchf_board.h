@@ -1174,9 +1174,31 @@ typedef struct TransceiverState
 	TuneToneMode tune_tone_mode;
 
 	uint16_t ramsize; // in KB, this is used to distinguish  between 192 and 256 kB models.
+
+	// Freedv Test DL2FW
+
+	bool	FDV_TX_encode_ready;
+	bool	FDV_TX_samples_ready;
+	uint16_t FDV_TX_out_start_pt;
+	uint16_t FDV_TX_in_start_pt;
+
+	// end Freedv Test DL2FW
+
+
 } TransceiverState;
 //
 extern __IO TransceiverState ts;
+
+
+//UGLY test for FREEDV - some globals :-(
+
+struct freedv *f_FREEDV;
+short FDV_TX_in_buff[320], FDV_TX_out_buff[320];
+
+//UGLY test for FREEDV - some globals :-(
+
+
+
 
 #define	POWERDOWN_DELAY_COUNT	30	// Delay in main service loop for the "last second" before power-down - to allow EEPROM write to complete
 

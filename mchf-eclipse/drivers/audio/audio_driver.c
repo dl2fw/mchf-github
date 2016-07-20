@@ -12,6 +12,7 @@
 **  Licence:		CC BY-NC-SA 3.0                                                **
 ************************************************************************************/
 
+
 // Common
 #include "mchf_board.h"
 #include "profiling.h"
@@ -2951,6 +2952,17 @@ static void audio_dv_tx_processor(int16_t *src, int16_t *dst, int16_t size)
     int16_t				psize;		// processing size, with decimation
     float				post_agc_gain_scaling;
 
+// Freedv Test DL2FW
+
+	int16_t				j,k;
+	int16_t				imbuff_count = 0;
+	static int16_t		outbuff_count = 0;
+	static short		imbuff[48];
+	static int16_t		trans_count_in=0;
+	static int16_t		trans_count_out=0;
+
+
+// end Freedv Test DL2FW
 
     psize = size/(int16_t)ads.decimation_rate;	// rescale sample size inside decimated portion based on decimation factor
 
@@ -2983,9 +2995,68 @@ static void audio_dv_tx_processor(int16_t *src, int16_t *dst, int16_t size)
     //
     //
     // *****************************   DV Modulator goes here - ads.a_buffer must be at 8 ksps
+
+// Freedv Test DL2FW
+
+
+    // assure that filter has been set to > 5 KHz so that we have 24KSamples when trying this here
+	// here we have size /2 /2 = 16 samples at 24 kSamples/s left over from the 64 passed to the function//
     //
-    //
-    //
+
+    	for(k=0; k < 16 ; k++ ) {
+		imbuff[k+imbuff_count*16]= (short) ads.a_buffer[k]; //taking 3 buffers together to get 48 samples ( better handling because dividable by 3)
+	}
+	imbuff_count++;
+
+	// when we collected 3 buffers (48 Samples) we go further...
+
+	if (imbuff_count > 2) { //from these 48 samples we take every 3rd sample to get down to 8Ksamples/sec
+		imbuff_count=0;
+		for (j=0; j < (3*size/4); j+=3){   // 48 = 3* size/2/2
+			FDV_TX_in_buff[trans_count_in] = imbuff[j]; //transfer every 3rd sample out of 48 to the FDV_in buffer
+			trans_count_in++; //increases by 16 after every completed loop == 48/3
+		}
+	}
+
+	// after 10 previous loops we go further (we have 10 times 16 samples ready)
+
+	if (trans_count_in == 160) { //we have enough samples ready to start the FreeDV encoding
+
+		ts.FDV_TX_in_start_pt = 0;
+		ts.FDV_TX_samples_ready = true;  //handshake to external function in ui.driver_thread
+
+		// after 10 more loops we go further with the 2nd part of the buffer
+
+	} else {
+		if (trans_count_in > 319) {    // using the 2nd buffer
+
+			ts.FDV_TX_in_start_pt = 160;
+			ts.FDV_TX_samples_ready = true;  //handshake to external function in ui.driver_thread
+			trans_count_in = 0;
+		}
+	}
+
+
+
+	// *****************************   DV Modulator goes here - ads.a_buffer must be at 8 ksps
+	//
+	//
+	// After the DV-Modulator we need the SSB Handler to modulate the AF coming from the DV-Modulater
+	//this has to be copied here!
+
+	// after the external function has encoded the samples we go further...
+
+if (ts.FDV_TX_encode_ready) {
+
+	for (i = 0; i<16; i++) {
+
+		ads.a_buffer[i]   = (float) FDV_TX_out_buff[ts.FDV_TX_out_start_pt + i + outbuff_count];
+	}
+
+	outbuff_count+=16;  // set to the next 16 samples
+
+
+
     //
     // Calculate scaling based on decimation rate since this affects the audio gain
     //
@@ -3063,6 +3134,17 @@ static void audio_dv_tx_processor(int16_t *src, int16_t *dst, int16_t size)
             *dst++ = (int16_t)ads.i_buffer[i];	// save right channel
         }
     }
+
+   }
+
+if (outbuff_count == 480) {
+	outbuff_count = 0;
+	ts.FDV_TX_encode_ready = false;
+ }
+
+
+
+
     return;
 }
 

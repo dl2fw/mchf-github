@@ -47,6 +47,12 @@
 //
 #include "cat_driver.h"
 
+// Freedv Test DL2FW
+#include "freedv_api.h"
+#include "codec2_fdmdv.h"
+// end Freedv Test DL2FW
+
+
 // ----------------------------------------------------
 // Create a time reference incremented by 1 mS and 10mS
 //__IO uint32_t LocalTime_1MS  = 0;
@@ -445,6 +451,13 @@ void TransceiverStateInit(void)
     ts.display_dbm = 0;						// style of dBm display, 0=OFF, 1= dbm, 2= dbm/Hz
 	ts.dBm_count = 0;						// timer start
 
+
+	// Freedv Test DL2FW
+		ts.FDV_TX_encode_ready = false;		// FREEDV handshaking test DL2FW
+		ts.FDV_TX_samples_ready = false;	// FREEDV handshaking test DL2FW
+	// end Freedv Test DL2FW
+
+
 // development setting for DF8OE
 	if( *(__IO uint32_t*)(SRAM2_BASE+5) == 0x29)
 	  {
@@ -559,6 +572,13 @@ int main(void)
 
     if (ts.flags1 & FLAGS1_CAT_MODE_ACTIVE)
         cat_driver_init();
+
+
+    // Freedv Test DL2FW
+    	f_FREEDV = freedv_open(FREEDV_MODE_1600);
+    // end Freedv Test DL2FW
+
+
 
     // Transceiver main loop
     for(;;)
