@@ -726,9 +726,22 @@ void UiDriver_HandleTouchScreen()
             UiDriver_FrequencyUpdateLOandDisplay(true);
         }
         if(check_tp_coordinates(0,7,10,13))			// toggle digital modes
+
         {
             incr_wrap_uint8(&ts.digital_mode,0,7);
             UiDriver_DisplayDigitalMode();
+
+
+            if (ts.digital_mode == 1) {
+
+            		ts.dvmode = 1;
+            	}
+            	else {
+            		ts.dvmode = 0;
+            	}
+
+
+
         }
         if(check_tp_coordinates(26,35,39,46))			// dynamic tuning activation
         {
