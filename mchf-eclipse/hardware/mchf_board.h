@@ -1190,12 +1190,12 @@ typedef struct TransceiverState
 extern __IO TransceiverState ts;
 
 
-//UGLY test for FREEDV - some globals :-(
+//DL2FW UGLY test for FREEDV - some globals :-(
 
 struct freedv *f_FREEDV;
-short FDV_TX_in_buff[320], FDV_TX_out_buff[320];
+short FDV_TX_in_buff[640], FDV_TX_out_buff[1920];
 
-//UGLY test for FREEDV - some globals :-(
+//end DL2FW UGLY test for FREEDV - some globals :-(
 
 
 

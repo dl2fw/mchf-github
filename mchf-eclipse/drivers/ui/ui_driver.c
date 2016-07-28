@@ -7047,7 +7047,7 @@ void ui_driver_thread()
 	// Freedv Test DL2FW
 	static uint16_t	FDV_TX_pt = 0;
 	uint16_t	i=0;
-	static short FDV_TX_out_im_buff[160];
+	static short FDV_TX_out_im_buff[320];
 	// END Freedv Test DL2FW
 
 
@@ -7068,18 +7068,18 @@ void ui_driver_thread()
 	// Freedv Test DL2FW
 			if (ts.digital_mode == 1) {  // if we are in freedv1-mode and ...
 
-				ts.FDV_TX_encode_ready = false;
+				//test ts.FDV_TX_encode_ready = false;
 
 				if ((ts.txrx_mode == TRX_MODE_TX) && (ts.FDV_TX_samples_ready)){ // ...and if we are transmitting and samples from dv_tx_processor are ready
 
-					if (FDV_TX_pt > 959) FDV_TX_pt = 0;
+					if (FDV_TX_pt > 1919) FDV_TX_pt = 0; //959?
 
-					freedv_tx(f_FREEDV, &FDV_TX_in_buff[ts.FDV_TX_in_start_pt], &FDV_TX_out_im_buff[0]);  // start the encoding process
+					freedv_tx(f_FREEDV, &FDV_TX_out_im_buff[0], &FDV_TX_in_buff[ts.FDV_TX_in_start_pt]);  // start the encoding process
 					ts.FDV_TX_samples_ready = false;
 
 					//now we are doing ugly upsampling to 24 kSamples here - has to be removed later
 
-					for (i = 0;i > 159; i++) {
+					for (i = 0;i < 319; i++) {
 						FDV_TX_out_buff[3*i   +   FDV_TX_pt] = FDV_TX_out_im_buff[i];
 						FDV_TX_out_buff[3*i + 1 + FDV_TX_pt] = FDV_TX_out_im_buff[i];
 						FDV_TX_out_buff[3*i + 2 + FDV_TX_pt] = FDV_TX_out_im_buff[i];
@@ -7088,7 +7088,7 @@ void ui_driver_thread()
 					ts.FDV_TX_out_start_pt = FDV_TX_pt;
 					ts.FDV_TX_encode_ready = true;  //handshake to the dv_tx_processor - has also to be resetted inside dv_tx_proc?
 
-					FDV_TX_pt +=480;
+					FDV_TX_pt += 960;
 					// lets try the complex function later to go directly I/Q!
 
 

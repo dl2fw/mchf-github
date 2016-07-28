@@ -3170,7 +3170,6 @@ audio_tx_processor (int16_t *src, int16_t *dst, int16_t size)
 static void
 audio_dv_tx_processor (int16_t *src, int16_t *dst, int16_t size)
 {
-  static ulong i;
   float32_t gain_calc, min, max;
 //	int16_t				*ptr;
   uint32_t pindex;
@@ -3179,8 +3178,8 @@ audio_dv_tx_processor (int16_t *src, int16_t *dst, int16_t size)
 
 // Freedv Test DL2FW
 
-  int16_t j, k;
-  int16_t imbuff_count = 0;
+  int16_t i,j, k;
+  static int16_t imbuff_count = 0;
   static int16_t outbuff_count = 0;
   static short imbuff[48];
   static int16_t trans_count_in = 0;
@@ -3247,7 +3246,7 @@ audio_dv_tx_processor (int16_t *src, int16_t *dst, int16_t size)
 
   // after 10 previous loops we go further (we have 10 times 16 samples ready)
 
-  if (trans_count_in == 160)
+  if (trans_count_in == 320)
     { //we have enough samples ready to start the FreeDV encoding
 
       ts.FDV_TX_in_start_pt = 0;
@@ -3258,10 +3257,10 @@ audio_dv_tx_processor (int16_t *src, int16_t *dst, int16_t size)
     }
   else
     {
-      if (trans_count_in > 319)
+      if (trans_count_in > 639)
 	{    // using the 2nd buffer
 
-	  ts.FDV_TX_in_start_pt = 160;
+	  ts.FDV_TX_in_start_pt = 320;
 	  ts.FDV_TX_samples_ready = true; //handshake to external function in ui.driver_thread
 	  trans_count_in = 0;
 	}
@@ -3278,14 +3277,16 @@ audio_dv_tx_processor (int16_t *src, int16_t *dst, int16_t size)
   if (ts.FDV_TX_encode_ready)
     {
 
-      for (i = 0; i < 16; i++)
+      for (i = 0; i < size/4; i++) //alt /2
 	{
 
-	  ads.a_buffer[i] = (float) FDV_TX_out_buff[ts.FDV_TX_out_start_pt + i
-	      + outbuff_count];
+	  ads.a_buffer[i] = FDV_TX_out_buff[ts.FDV_TX_out_start_pt + i
+	     + outbuff_count];
+	  ads.a_buffer[i+1] = ads.a_buffer[i]; //alt entfaellt
+
 	}
 
-      outbuff_count += 16;  // set to the next 16 samples
+      outbuff_count += 16;  //  alt 32 set to the next 32 samples
 
       //
       // Calculate scaling based on decimation rate since this affects the audio gain
@@ -3371,6 +3372,8 @@ audio_dv_tx_processor (int16_t *src, int16_t *dst, int16_t size)
       //
       // Equalize based on band and simultaneously apply I/Q gain adjustments
       //
+
+      /*
       arm_scale_f32 (
 	  (float32_t *) ads.i_buffer,
 	  (float32_t) (ts.tx_power_factor * ts.tx_adj_gain_var_i * SSB_GAIN_COMP),
@@ -3379,12 +3382,17 @@ audio_dv_tx_processor (int16_t *src, int16_t *dst, int16_t size)
 	  (float32_t *) ads.q_buffer,
 	  (float32_t) (ts.tx_power_factor * ts.tx_adj_gain_var_q * SSB_GAIN_COMP),
 	  (float32_t *) ads.q_buffer, size / 2);
+
+      */
+
       //
       // if this void is going to be used for DIGI modes, put code for TX phase adjustment at this place! DD4WH 2016_03_30
       //
       // ------------------------
       // Output I and Q as stereo data
-      for (i = 0; i < size / 2; i++)
+
+
+      /* for (i = 0; i < size / 2; i++)
 	{
 	  // Prepare data for DAC
 	  if (ts.dmod_mode == DEMOD_USB)
@@ -3398,10 +3406,15 @@ audio_dv_tx_processor (int16_t *src, int16_t *dst, int16_t size)
 	      *dst++ = (int16_t) ads.i_buffer[i];	// save right channel
 	    }
 	}
+      */
+				 // SSB_GAIN_COMP
+      audio_tx_final_iq_processing (0.38, ts.dmod_mode == DEMOD_LSB,
+      				    dst, size);
+
 
     }
 
-  if (outbuff_count == 480)
+  if (outbuff_count > 959)
     {
       outbuff_count = 0;
       ts.FDV_TX_encode_ready = false;
