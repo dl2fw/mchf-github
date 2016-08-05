@@ -2361,6 +2361,23 @@ audio_dv_rx_processor (int16_t *src, int16_t *dst, int16_t size)
   //
   float post_agc_gain_scaling;
 
+  // Freedv Test DL2FW
+
+    static int16_t j, k,l;
+    static int16_t imbuff_count = 0;
+    static int16_t outbuff_count = 0;
+    static short imbuff[48]; //old 48
+    static int16_t trans_count_in = 0;
+    static int16_t trans_count_out = 0;
+    static int16_t modem_buffer_offset = 0;
+
+  // end Freedv Test DL2FW
+
+
+
+
+
+
   psize = size / (int16_t) ads.decimation_rate;	// rescale sample size inside decimated portion based on decimation factor:  This must be set to 6 for DV1300 mode!
   //
   //
@@ -2468,27 +2485,108 @@ audio_dv_rx_processor (int16_t *src, int16_t *dst, int16_t size)
 		(float32_t *) ads.a_buffer, psize / 2);	// do vector multiplication to apply delayed "running" AGC data
   //
   //
+  // Freedv Test DL2FW
+
+  //Variables have to be totally renamed to decide / combine RX and TX procedures
+
+    // assure that filter has been set to > 5 KHz so that we have 24KSamples when trying this here
+    // here we have size /2 /2 = 16 samples at 24 kSamples/s left over from the 64 passed to the function//
+    //
+
+    for (k = 0; k < 16; k++)
+      {
+        imbuff[k + imbuff_count * 16] = (short) ads.a_buffer[k]; //taking 3 buffers together to get 48 samples ( better handling because dividable by 3)
+      }
+    imbuff_count++;
+
+    // when we collected 3 buffers (48/96 Samples) we go further...
+
+    if (imbuff_count > 2)
+      { //from these 48 samples we take every 3rd sample to get down to 8Ksamples/sec
+        imbuff_count = 0;
+        for (j = 0; j < 48; j += 3)  // old 48 and 3
+  	{   // 48 = 3* size/2/2
+  	  FDV_TX_in_buff[trans_count_in] = imbuff[j]; //transfer every 3rd sample out of 48 to the FDV_in buffer
+  	  trans_count_in++; //increases by 16 after every completed loop == 48/3
+  	}
+      }
+
+    // after 20 previous loops we go further (we have 20 times 16 samples ready)
+    //20*16*320 Samples @ 8KSamples/sec = 40msec--> every 40msec handshake signal
+
+    if (trans_count_in == 320)              //&imbuff_count==0?
+      { //we have enough samples ready to start the FreeDV encoding
+
+        ts.FDV_TX_in_start_pt = 0;
+        ts.FDV_TX_samples_ready = true; //handshake to external function in ui.driver_thread
+
+        // after 10 more loops we go further with the 2nd part of the buffer
+
+      }
+    else
+      {
+        if (trans_count_in > 639)          //&imbuff_count==0?
+  	{    // using the 2nd buffer
+
+  	  ts.FDV_TX_in_start_pt = 320;
+  	  ts.FDV_TX_samples_ready = true; //handshake to external function in ui.driver_thread
+  	  trans_count_in = 0;
+  	}
+      }
+
+
+
+
+
+
   // ***************************************************************************************************
   //
   // DV Demodulator goes here.  ads.a_buffer must now be at 8ksps
   //
   // ***************************************************************************************************
   //
-  //
+
+   //
   // Calculate scaling based on decimation rate since this affects the audio gain
   //
   post_agc_gain_scaling = POST_AGC_GAIN_SCALING_DECIMATE_4;
   //
   // Scale audio to according to AGC setting, demodulation mode and required fixed levels
   //
+
+  if (ts.FDV_TX_encode_ready)
+
+
+    {
+
+
+
+
+      for (l = 0; l < size/4; l++) //alt /2  now we are doing ugly upsampling by 2 again
+ 	{
+
+ 	  ads.a_buffer[2*l] = FDV_TX_out_buff[modem_buffer_offset + l //hier last ready einfuegen
+ 	     + outbuff_count];
+ 	  ads.a_buffer[2*l+1] = ads.a_buffer[2*l]; //alt entfaellt
+
+ 	}
+
+       outbuff_count += 16;  //  alt 32 set to the next 32 samples
+
+
+
+
+
+
+
   arm_scale_f32 ((float32_t *) ads.a_buffer,
 		 (float32_t) (ads.post_agc_gain * post_agc_gain_scaling),
-		 (float32_t *) ads.a_buffer, psize / 2);// apply fixed amount of audio gain scaling to make the audio levels correct along with AGC
+		 (float32_t *) ads.b_buffer, psize / 2);// apply fixed amount of audio gain scaling to make the audio levels correct along with AGC
   //
   // resample back to original sample rate while doing low-pass filtering to minimize aliasing effects
   //
-  arm_fir_interpolate_f32 (&INTERPOLATE_RX, (float32_t *) ads.a_buffer,
-			   (float32_t *) ads.b_buffer, psize / 2);
+//    arm_fir_interpolate_f32 (&INTERPOLATE_RX, (float32_t *) ads.a_buffer,
+//			   (float32_t *) ads.b_buffer, psize / 2);
   //
   if (ts.rx_muting)
     {
@@ -2528,6 +2626,17 @@ audio_dv_rx_processor (int16_t *src, int16_t *dst, int16_t size)
       *dst++ = (int16_t) ads.b_buffer[i];// Speaker channel (variable level)
       *dst++ = (int16_t) ads.a_buffer[i++];	// LINE OUT (constant level)
     }
+
+
+    }
+
+      if (outbuff_count > 959)
+        {
+          outbuff_count = 0;
+          //ts.FDV_TX_encode_ready = false; //das ist falsch!!!
+          modem_buffer_offset = ts.FDV_TX_out_start_pt; // hier internen neuen Pointer auf externen setzen
+        }
+
 }
 //         /
 //*----------------------------------------------------------------------------
@@ -3178,12 +3287,13 @@ audio_dv_tx_processor (int16_t *src, int16_t *dst, int16_t size)
 
 // Freedv Test DL2FW
 
-  int16_t i,j, k;
+  static int16_t i,j, k;
   static int16_t imbuff_count = 0;
   static int16_t outbuff_count = 0;
-  static short imbuff[48];
+  static short imbuff[48]; //old 48
   static int16_t trans_count_in = 0;
   static int16_t trans_count_out = 0;
+  static int16_t modem_buffer_offset = 0;
 
 // end Freedv Test DL2FW
 
@@ -3210,12 +3320,15 @@ audio_dv_tx_processor (int16_t *src, int16_t *dst, int16_t size)
       gain_calc = (float) ts.tx_mic_gain_mult;// We are in MIC In mode:  Calculate Microphone gain
       gain_calc /= MIC_GAIN_RESCALE;// rescale microphone gain to a reasonable range
     }
+  // // Apply gain if not in TUNE mode
+    arm_scale_f32 ((float32_t *) ads.a_buffer, (float32_t) gain_calc,
+		     (float32_t *) ads.a_buffer, size / 2);	// apply gain
   //
   //
   // Do decimation down to lower rate for heavy-duty processing to reduce processor load - NOT YET AT 8 KHz!!!
   //
-  arm_fir_decimate_f32 (&DECIMATE_RX, (float32_t *) ads.a_buffer,
-			(float32_t *) ads.a_buffer, size / 2);// LPF built into decimation (Yes, you can decimate-in-place!)
+    arm_fir_decimate_f32 (&DECIMATE_RX, (float32_t *) ads.a_buffer,
+    			(float32_t *) ads.a_buffer, size / 2);// LPF built into decimation (Yes, you can decimate-in-place!)
   //
   //
   // *****************************   DV Modulator goes here - ads.a_buffer must be at 8 ksps
@@ -3232,21 +3345,22 @@ audio_dv_tx_processor (int16_t *src, int16_t *dst, int16_t size)
     }
   imbuff_count++;
 
-  // when we collected 3 buffers (48 Samples) we go further...
+  // when we collected 3 buffers (48/96 Samples) we go further...
 
   if (imbuff_count > 2)
     { //from these 48 samples we take every 3rd sample to get down to 8Ksamples/sec
       imbuff_count = 0;
-      for (j = 0; j < (3 * size / 4); j += 3)
+      for (j = 0; j < 48; j += 3)  // old 48 and 3
 	{   // 48 = 3* size/2/2
 	  FDV_TX_in_buff[trans_count_in] = imbuff[j]; //transfer every 3rd sample out of 48 to the FDV_in buffer
 	  trans_count_in++; //increases by 16 after every completed loop == 48/3
 	}
     }
 
-  // after 10 previous loops we go further (we have 10 times 16 samples ready)
+  // after 20 previous loops we go further (we have 20 times 16 samples ready)
+  //20*16*320 Samples @ 8KSamples/sec = 40msec--> every 40msec handshake signal
 
-  if (trans_count_in == 320)
+  if (trans_count_in == 320)              //&imbuff_count==0?
     { //we have enough samples ready to start the FreeDV encoding
 
       ts.FDV_TX_in_start_pt = 0;
@@ -3257,7 +3371,7 @@ audio_dv_tx_processor (int16_t *src, int16_t *dst, int16_t size)
     }
   else
     {
-      if (trans_count_in > 639)
+      if (trans_count_in > 639)          //&imbuff_count==0?
 	{    // using the 2nd buffer
 
 	  ts.FDV_TX_in_start_pt = 320;
@@ -3277,12 +3391,12 @@ audio_dv_tx_processor (int16_t *src, int16_t *dst, int16_t size)
   if (ts.FDV_TX_encode_ready)
     {
 
-      for (i = 0; i < size/4; i++) //alt /2
+      for (i = 0; i < size/4; i++) //alt /2  now we are doing ugly upsampling by 2 again
 	{
 
-	  ads.a_buffer[i] = FDV_TX_out_buff[ts.FDV_TX_out_start_pt + i
+	  ads.a_buffer[2*i] = FDV_TX_out_buff[modem_buffer_offset + i //hier last ready einfuegen
 	     + outbuff_count];
-	  ads.a_buffer[i+1] = ads.a_buffer[i]; //alt entfaellt
+	  ads.a_buffer[2*i+1] = ads.a_buffer[2*i]; //alt entfaellt
 
 	}
 
@@ -3345,15 +3459,15 @@ audio_dv_tx_processor (int16_t *src, int16_t *dst, int16_t size)
 
 
 
-      //
-      //gain_calc = (float) ts.alc_tx_postfilt_gain_var;// get post-filter gain setting
-      //gain_calc /= 2;						// halve it
-      //gain_calc += 0.5;				// offset it so that 2 = unity
-      //arm_scale_f32 ((float32_t *) ads.i_buffer, (float32_t) gain_calc,
-	//	     (float32_t *) ads.i_buffer, size / 2);// use optimized function to apply scaling to I/Q buffers
-      //arm_scale_f32 ((float32_t *) ads.q_buffer, (float32_t) gain_calc,
-//		     (float32_t *) ads.q_buffer, size / 2);
-      //
+
+      gain_calc = (float) ts.alc_tx_postfilt_gain_var;// get post-filter gain setting
+      gain_calc /= 2;						// halve it
+      gain_calc += 0.5;				// offset it so that 2 = unity
+      arm_scale_f32 ((float32_t *) ads.i_buffer, (float32_t) gain_calc,
+		     (float32_t *) ads.i_buffer, size / 2);// use optimized function to apply scaling to I/Q buffers
+      arm_scale_f32 ((float32_t *) ads.q_buffer, (float32_t) gain_calc,
+		     (float32_t *) ads.q_buffer, size / 2);
+
 
       if (ts.iq_freq_mode)	 // is transmit frequency conversion to be done?
            // USB && (-6kHz || -12kHz) --> false, else true
@@ -3373,7 +3487,7 @@ audio_dv_tx_processor (int16_t *src, int16_t *dst, int16_t size)
       // Equalize based on band and simultaneously apply I/Q gain adjustments
       //
 
-      /*
+
       arm_scale_f32 (
 	  (float32_t *) ads.i_buffer,
 	  (float32_t) (ts.tx_power_factor * ts.tx_adj_gain_var_i * SSB_GAIN_COMP),
@@ -3383,7 +3497,7 @@ audio_dv_tx_processor (int16_t *src, int16_t *dst, int16_t size)
 	  (float32_t) (ts.tx_power_factor * ts.tx_adj_gain_var_q * SSB_GAIN_COMP),
 	  (float32_t *) ads.q_buffer, size / 2);
 
-      */
+
 
       //
       // if this void is going to be used for DIGI modes, put code for TX phase adjustment at this place! DD4WH 2016_03_30
@@ -3417,7 +3531,8 @@ audio_dv_tx_processor (int16_t *src, int16_t *dst, int16_t size)
   if (outbuff_count > 959)
     {
       outbuff_count = 0;
-      ts.FDV_TX_encode_ready = false;
+      //ts.FDV_TX_encode_ready = false; //das ist falsch!!!
+      modem_buffer_offset = ts.FDV_TX_out_start_pt; // hier internen neuen Pointer auf externen setzen
     }
 
   return;

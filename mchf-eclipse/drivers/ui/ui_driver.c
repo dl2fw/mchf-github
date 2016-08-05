@@ -7048,6 +7048,9 @@ void ui_driver_thread()
 	static uint16_t	FDV_TX_pt = 0;
 	uint16_t	i=0;
 	static short FDV_TX_out_im_buff[320];
+
+	int16_t s=0;
+	int16_t nout=0;
 	// END Freedv Test DL2FW
 
 
@@ -7070,12 +7073,16 @@ void ui_driver_thread()
 
 				//test ts.FDV_TX_encode_ready = false;
 
-				if ((ts.txrx_mode == TRX_MODE_TX) && (ts.FDV_TX_samples_ready)){ // ...and if we are transmitting and samples from dv_tx_processor are ready
+				if ((ts.txrx_mode == TRX_MODE_TX) && (ts.FDV_TX_samples_ready))
+				  {  // ...and if we are transmitting and samples from dv_tx_processor are ready
 
 					if (FDV_TX_pt > 1919) FDV_TX_pt = 0; //959?
+					ts.FDV_TX_samples_ready = false;
 
 					freedv_tx(f_FREEDV, &FDV_TX_out_im_buff[0], &FDV_TX_in_buff[ts.FDV_TX_in_start_pt]);  // start the encoding process
-					ts.FDV_TX_samples_ready = false;
+// bypass the encoding
+//					for (s=0;s<320;s++)
+//					  FDV_TX_out_im_buff[s] = FDV_TX_in_buff[s + ts.FDV_TX_in_start_pt];
 
 					//now we are doing ugly upsampling to 24 kSamples here - has to be removed later
 
@@ -7085,16 +7092,47 @@ void ui_driver_thread()
 						FDV_TX_out_buff[3*i + 2 + FDV_TX_pt] = FDV_TX_out_im_buff[i];
 					}
 
-					ts.FDV_TX_out_start_pt = FDV_TX_pt;
+					ts.FDV_TX_out_start_pt = FDV_TX_pt;//save offset to last ready region
 					ts.FDV_TX_encode_ready = true;  //handshake to the dv_tx_processor - has also to be resetted inside dv_tx_proc?
 
 					FDV_TX_pt += 960;
-					// lets try the complex function later to go directly I/Q!
+					// lets try the complex function later to go directly I/Q! and save some time!!
 
 
-				}
 
 
+
+
+				  }
+
+				else if ((ts.txrx_mode == TRX_MODE_RX) && (ts.FDV_TX_samples_ready))// have to renam variables to make it clear TX-RX
+
+				  {
+
+				    if (FDV_TX_pt > 1919) FDV_TX_pt = 0; //959?
+
+				      ts.FDV_TX_samples_ready = false;
+
+				      nout=freedv_rx(f_FREEDV, &FDV_TX_out_im_buff[0], &FDV_TX_in_buff[ts.FDV_TX_in_start_pt]);  // start the encoding process
+  // bypass the encoding
+  //					for (s=0;s<320;s++)
+  //					  FDV_TX_out_im_buff[s] = FDV_TX_in_buff[s + ts.FDV_TX_in_start_pt];
+
+				      //now we are doing ugly upsampling to 24 kSamples here - has to be removed later
+
+				      for (i = 0;i < 319; i++) {
+					      FDV_TX_out_buff[3*i   +   FDV_TX_pt] = FDV_TX_out_im_buff[i];
+					      FDV_TX_out_buff[3*i + 1 + FDV_TX_pt] = FDV_TX_out_im_buff[i];
+					      FDV_TX_out_buff[3*i + 2 + FDV_TX_pt] = FDV_TX_out_im_buff[i];
+				      }
+
+				      ts.FDV_TX_out_start_pt = FDV_TX_pt;//save offset to last ready region
+				      ts.FDV_TX_encode_ready = true;  //handshake to the dv_tx_processor - has also to be resetted inside dv_tx_proc?
+
+				      FDV_TX_pt += 960;
+
+
+				  }
 
 	}
 
