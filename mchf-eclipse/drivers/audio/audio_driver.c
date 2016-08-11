@@ -35,6 +35,7 @@
 #include "filters.h"
 #include "ui_lcd_hy28.h"
 #include "ui_configuration.h"
+#include "codec2_fifo.h"
 
 // SSB filters - now handled in ui_driver to allow I/Q phase adjustment
 
@@ -3290,12 +3291,12 @@ audio_dv_tx_processor (int16_t *src, int16_t *dst, int16_t size)
   static int16_t i,j, k;
   static int16_t imbuff_count = 0;
   static int16_t outbuff_count = 0;
-  static short imbuff[48]; //old 48
+  static short imbuff[48], out_sample[1], in_sample[1]; //old 48
   static int16_t trans_count_in = 0;
   static int16_t trans_count_out = 0;
   static int16_t modem_buffer_offset = 0;
   static int16_t modulus_NF = 0, modulus_MOD = 0;
-
+  int16_t r_wert;
 // end Freedv Test DL2FW
 
   psize = size / (int16_t) ads.decimation_rate;	// rescale sample size inside decimated portion based on decimation factor
@@ -3357,8 +3358,10 @@ audio_dv_tx_processor (int16_t *src, int16_t *dst, int16_t size)
       {
 	if (k % 6 == modulus_NF)  //every 6th sample has to be catched
 	  {
-	    FDV_TX_in_buff[trans_count_in] = (short) ads.a_buffer[k];
-	    trans_count_in++;
+	    //FDV_TX_in_buff[trans_count_in] = (short) ads.a_buffer[k];
+	    in_sample[0]=(short)ads.a_buffer[k];
+	  r_wert = fifo_write(NF_fifo,in_sample,1);
+	    //trans_count_in++;
 	  }
       }
 
@@ -3366,7 +3369,7 @@ audio_dv_tx_processor (int16_t *src, int16_t *dst, int16_t size)
     modulus_NF %= 6; //  reset modulus to 0 at modulus = 12
 
 
-  if (trans_count_in == 320)
+  /*if (trans_count_in == 320)
     {                       //we have enough samples ready to start the FreeDV encoding
 
       ts.FDV_TX_in_start_pt = 0;
@@ -3384,34 +3387,23 @@ audio_dv_tx_processor (int16_t *src, int16_t *dst, int16_t size)
 	  trans_count_in = 0;
 	}
     }
+*/
 
 
 
 
-
-  if (ts.FDV_TX_encode_ready)  // freeDV encode has finished?
+  if (fifo_used(mod_fifo)> 5)  // freeDV encode has finished?
     {
 
 
       for (i = 0; i < size / 2; i++) //  now we are doing ugly upsampling by 6
       	{
-
-      	  ads.a_buffer[i] = FDV_TX_out_buff[modem_buffer_offset + ((i + modulus_MOD) / 6) + outbuff_count];
-
+	  if ((i + modulus_MOD) % 6 == 0) fifo_read(mod_fifo,out_sample,1);
+	  ads.a_buffer[i] = out_sample[0];
       	}
 
       modulus_MOD += 2;  // modulus is not exactly what it is... :-(
-
-      if (modulus_MOD == 6)  // this is a bit ugly - hope to find a better
-	{
-	  modulus_MOD = 0;
-	  outbuff_count += 6;
-	}
-      else
-	{
-	  outbuff_count += 5;  //  5*6 +2 samples upsampled
-	}
-
+      modulus_MOD %= 6;
 
 
       //
@@ -3486,14 +3478,8 @@ audio_dv_tx_processor (int16_t *src, int16_t *dst, int16_t size)
 
     }
 
-  if (outbuff_count > 319)
-    {
-      outbuff_count = 0;
-      //ts.FDV_TX_encode_ready = false; //das ist falsch!!!
-      modem_buffer_offset = ts.FDV_TX_out_start_pt; // hier internen neuen Pointer auf externen setzen
-    }
 
-  return;
+  //return;  //????
 }
 
 //*----------------------------------------------------------------------------

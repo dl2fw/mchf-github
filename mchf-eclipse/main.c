@@ -50,6 +50,8 @@
 // Freedv Test DL2FW
 #include "freedv_api.h"
 #include "codec2_fdmdv.h"
+#include "codec2_fifo.h"
+#include "assert.h"
 // end Freedv Test DL2FW
 
 
@@ -575,8 +577,21 @@ int main(void)
 
 
     // Freedv Test DL2FW
+
+
+
     	f_FREEDV = freedv_open(FREEDV_MODE_1600);
-    // end Freedv Test DL2FW
+
+    	NF_fifo = fifo_create(640);
+    	assert(NF_fifo!=NULL);
+
+    	mod_fifo = fifo_create(640);
+    	assert(mod_fifo!=NULL);
+
+
+
+
+    	// end Freedv Test DL2FW
 
 
 

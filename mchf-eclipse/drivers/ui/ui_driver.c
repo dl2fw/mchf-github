@@ -55,6 +55,7 @@
 // Freedv Test DL2FW
 #include "freedv_api.h"
 #include "codec2_fdmdv.h"
+#include "codec2_fifo.h"
 // ENDE Freedv Test DL2FW
 
 static void 	UiDriverPublicsInit();
@@ -7071,34 +7072,32 @@ void ui_driver_thread()
 	// Freedv Test DL2FW
 			if (ts.digital_mode == 1) {  // if we are in freedv1-mode and ...
 
-				if ((ts.txrx_mode == TRX_MODE_TX) && (ts.FDV_TX_samples_ready))
+				if (ts.txrx_mode == TRX_MODE_TX)
 				  {  // ...and if we are transmitting and samples from dv_tx_processor are ready
 
-				    if (was_here==true)  //shift for one thread (app 10ms) at the beginning
-				     {
-					if (FDV_TX_pt > 959) FDV_TX_pt = 0;
 
-					  ts.FDV_TX_samples_ready = false;
-					  freedv_tx(f_FREEDV, &FDV_TX_out_buff[FDV_TX_pt], &FDV_TX_in_buff[ts.FDV_TX_in_start_pt]);  // start the encoding process
-// to bypass the encoding
-//						for (s=0;s<320;s++)
-//					  	FDV_TX_out_buff[s+FDV_TX_pt] = FDV_TX_in_buff[s + ts.FDV_TX_in_start_pt];
+					if (fifo_used(NF_fifo) > 319)
 
-					  ts.FDV_TX_out_start_pt = FDV_TX_pt;//save offset to last ready region
-					  if (FDV_TX_pt > 639) ts.FDV_TX_encode_ready = true;  //handshake to the dv_tx_processor - has also to be resetted inside dv_tx_proc?
-					  FDV_TX_pt += 320;
+					  {
+					    if (was_here)
+					      {
+					       fifo_read(NF_fifo,FDV_TX_in_buff,320);
+
+					       freedv_tx(f_FREEDV, &FDV_TX_out_buff[0], &FDV_TX_in_buff[0]);  // start the encoding process
+					       fifo_write(mod_fifo,FDV_TX_out_buff,320);
+					      }
+					    else if (fifo_used(NF_fifo) > 639) was_here=true; //fill buffer 2 times before starting
+					  }
+
 					    // lets try the complex function later to go directly I/Q! and save some time!!
 
-				      }
-
-				      was_here = true;
-				    }
+				   }
 
 				else if ((ts.txrx_mode == TRX_MODE_RX) && (ts.FDV_TX_samples_ready))// have to renam variables to make it clear TX-RX
 
-				  {
-				    was_here=false;
-
+				  { was_here=false; //assure that buffer will be filled again at next TX
+	/*
+				     {
 				    if (FDV_TX_pt > 959) FDV_TX_pt = 0; //959?
 
 				      ts.FDV_TX_samples_ready = false;
@@ -7120,7 +7119,7 @@ void ui_driver_thread()
 
 				      FDV_TX_pt += 320;
 
-
+	*/
 				  }
 
 	}
